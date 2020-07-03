@@ -44,7 +44,7 @@ class Encoder(nn.Module):
         for i in range(1, self.num_layers):
             conv = torch.relu(self.convs[i](conv))
             self.outputs['conv%s' % (i + 1)] = conv
-
+        conv = conv.contiguous()
         h = conv.view(conv.size(0), -1)
         return h
 
@@ -199,6 +199,15 @@ class DRQAgent(object):
         self.train()
         self.critic_target.train()
 
+        # print("actor: ", sum([param.numel() for param in self.actor.parameters()]))
+        # print("encoder: ", sum([param.numel() for param in self.critic.encoder.parameters()]))
+        # print("critic: ", sum([param.numel() for param in self.critic.parameters()]))
+        # print("critic_q1_state: ", sum([param.numel() for param in self.critic.Q1_state.parameters()]))
+        # print("critic_q2_state: ", sum([param.numel() for param in self.critic.Q2_state.parameters()]))
+        # print("critic_q1: ", sum([param.numel() for param in self.critic.Q1.parameters()]))
+        # print("critic_q2: ", sum([param.numel() for param in self.critic.Q2.parameters()]))
+        # print("critic: ", sum([param.numel() for param in self.critic.parameters()]))
+
     def train(self, training=True):
         self.training = training
         self.actor.train(training)
@@ -228,27 +237,27 @@ class DRQAgent(object):
                                  target_Q2) - self.alpha.detach() * log_prob
             target_Q = reward + (not_done * self.discount * target_V)
 
-            dist_aug = self.actor(next_obs_aug)
-            next_action_aug = dist_aug.rsample()
-            log_prob_aug = dist_aug.log_prob(next_action_aug).sum(-1,
-                                                                  keepdim=True)
-            target_Q1, target_Q2 = self.critic_target(next_obs_aug,
-                                                      next_action_aug)
-            target_V = torch.min(
-                target_Q1, target_Q2) - self.alpha.detach() * log_prob_aug
-            target_Q_aug = reward + (not_done * self.discount * target_V)
-
-            target_Q = (target_Q + target_Q_aug) / 2
+            # dist_aug = self.actor(next_obs_aug)
+            # next_action_aug = dist_aug.rsample()
+            # log_prob_aug = dist_aug.log_prob(next_action_aug).sum(-1,
+            #                                                       keepdim=True)
+            # target_Q1, target_Q2 = self.critic_target(next_obs_aug,
+            #                                           next_action_aug)
+            # target_V = torch.min(
+            #     target_Q1, target_Q2) - self.alpha.detach() * log_prob_aug
+            # target_Q_aug = reward + (not_done * self.discount * target_V)
+            #
+            # target_Q = (target_Q + target_Q_aug) / 2
 
         # get current Q estimates
         current_Q1, current_Q2 = self.critic(obs, action)
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(
             current_Q2, target_Q)
 
-        Q1_aug, Q2_aug = self.critic(obs_aug, action)
+        # Q1_aug, Q2_aug = self.critic(obs_aug, action)
 
-        critic_loss += F.mse_loss(Q1_aug, target_Q) + F.mse_loss(
-            Q2_aug, target_Q)
+        # critic_loss += F.mse_loss(Q1_aug, target_Q) + F.mse_loss(
+        #     Q2_aug, target_Q)
 
         logger.log('train_critic/loss', critic_loss, step)
 

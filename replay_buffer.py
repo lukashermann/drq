@@ -17,8 +17,8 @@ class ReplayBuffer(object):
             nn.ReplicationPad2d(image_pad),
             kornia.augmentation.RandomCrop((obs_shape[-1], obs_shape[-1])))
 
-        self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        self.obses = np.empty((capacity, *obs_shape), dtype=np.float32)
+        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.float32)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones = np.empty((capacity, 1), dtype=np.float32)
@@ -61,10 +61,13 @@ class ReplayBuffer(object):
         not_dones_no_max = torch.as_tensor(self.not_dones_no_max[idxs],
                                            device=self.device)
 
-        obses = self.aug_trans(obses)
-        next_obses = self.aug_trans(next_obses)
+        # obses = self.aug_trans(obses)
+        # next_obses = self.aug_trans(next_obses)
+        #
+        # obses_aug = self.aug_trans(obses_aug)
+        # next_obses_aug = self.aug_trans(next_obses_aug)
 
-        obses_aug = self.aug_trans(obses_aug)
-        next_obses_aug = self.aug_trans(next_obses_aug)
+        obses_aug = None
+        next_obses_aug = None
 
         return obses, actions, rewards, next_obses, not_dones_no_max, obses_aug, next_obses_aug

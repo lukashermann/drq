@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-import dmc2gym
+# import dmc2gym
 import hydra
 import torch
 import torch.nn as nn
@@ -16,11 +16,15 @@ import utils
 from logger import Logger
 from replay_buffer import ReplayBuffer
 from video import VideoRecorder
+import gym
+from env_wrappers import *
+from gym_grasping.envs.grasping_env import GraspingEnv
+
+
 
 torch.backends.cudnn.benchmark = True
 
-
-def make_env(cfg):
+def make_env(cfg, logger):
     """Helper function to create dm_control environment"""
     if cfg.env == 'ball_in_cup_catch':
         domain_name = 'ball_in_cup'
@@ -35,17 +39,19 @@ def make_env(cfg):
     # per dreamer: https://github.com/danijar/dreamer/blob/02f0210f5991c7710826ca7881f19c64a012290c/wrappers.py#L26
     camera_id = 2 if domain_name == 'quadruped' else 0
 
-    env = dmc2gym.make(domain_name=domain_name,
-                       task_name=task_name,
-                       seed=cfg.seed,
-                       visualize_reward=False,
-                       from_pixels=True,
-                       height=cfg.image_size,
-                       width=cfg.image_size,
-                       frame_skip=cfg.action_repeat,
-                       camera_id=camera_id)
+    # env = dmc2gym.make(domain_name=domain_name,
+    #                    task_name=task_name,
+    #                    seed=cfg.seed,
+    #                    visualize_reward=False,
+    #                    from_pixels=True,
+    #                    height=cfg.image_size,
+    #                    width=cfg.image_size,
+    #                    frame_skip=cfg.action_repeat,
+    #                    camera_id=camera_id)
 
-    env = utils.FrameStack(env, k=cfg.frame_stack)
+    env = gym.make(cfg.env)
+    env = DictToBoxWrapper(DictTransposeImage(CurriculumWrapper(env, cfg.num_train_steps, cfg.num_curriculum_epoch_steps, logger)))
+    # env = utils.FrameStack(env, k=cfg.frame_stack)
 
     env.seed(cfg.seed)
     assert env.action_space.low.min() >= -1
@@ -69,7 +75,13 @@ class Workspace(object):
 
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
-        self.env = make_env(cfg)
+        self.env = make_env(cfg, self.logger)
+
+        self.eval_env = gym.make(cfg.env)
+        self.eval_env = DictToBoxWrapper(DictTransposeImage(self.eval_env))
+        # env = utils.FrameStack(env, k=cfg.frame_stack)
+
+        self.eval_env.seed(cfg.seed + 111)
 
         cfg.agent.params.obs_shape = self.env.observation_space.shape
         cfg.agent.params.action_shape = self.env.action_space.shape
@@ -91,7 +103,7 @@ class Workspace(object):
     def evaluate(self):
         average_episode_reward = 0
         for episode in range(self.cfg.num_eval_episodes):
-            obs = self.env.reset()
+            obs = self.eval_env.reset()
             self.video_recorder.init(enabled=(episode == 0))
             done = False
             episode_reward = 0
@@ -99,8 +111,8 @@ class Workspace(object):
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
-                obs, reward, done, info = self.env.step(action)
-                self.video_recorder.record(self.env)
+                obs, reward, done, info = self.eval_env.step(action)
+                self.video_recorder.record(self.eval_env)
                 episode_reward += reward
                 episode_step += 1
 
@@ -156,7 +168,7 @@ class Workspace(object):
 
             # allow infinite bootstrap
             done = float(done)
-            done_no_max = 0 if episode_step + 1 == self.env._max_episode_steps else done
+            done_no_max = 0 if episode_step + 1 == self.env.max_episode_steps else done
             episode_reward += reward
 
             self.replay_buffer.add(obs, action, reward, next_obs, done,
@@ -167,7 +179,7 @@ class Workspace(object):
             self.step += 1
 
 
-@hydra.main(config_path='config.yaml', strict=True)
+@hydra.main(config_path='custom_config.yaml', strict=True)
 def main(cfg):
     from train import Workspace as W
     workspace = W(cfg)

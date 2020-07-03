@@ -72,13 +72,13 @@ def weight_init(m):
             m.bias.data.fill_(0.0)
 
 
-def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None):
+def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None, activation=nn.ReLU(inplace=True)):
     if hidden_depth == 0:
         mods = [nn.Linear(input_dim, output_dim)]
     else:
-        mods = [nn.Linear(input_dim, hidden_dim), nn.ReLU(inplace=True)]
+        mods = [nn.Linear(input_dim, hidden_dim), activation]
         for i in range(hidden_depth - 1):
-            mods += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(inplace=True)]
+            mods += [nn.Linear(hidden_dim, hidden_dim), activation]
         mods.append(nn.Linear(hidden_dim, output_dim))
     if output_mod is not None:
         mods.append(output_mod)
@@ -106,7 +106,7 @@ class FrameStack(gym.Wrapper):
             high=1,
             shape=((shp[0] * k,) + shp[1:]),
             dtype=env.observation_space.dtype)
-        self._max_episode_steps = env._max_episode_steps
+        self._max_episode_steps = env.max_episode_steps
 
     def reset(self):
         obs = self.env.reset()
