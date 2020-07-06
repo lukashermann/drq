@@ -76,9 +76,9 @@ class Workspace(object):
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
         self.env = make_env(cfg, self.logger)
-
         self.eval_env = gym.make(cfg.env)
         self.eval_env = DictToBoxWrapper(DictTransposeImage(self.eval_env))
+
         # env = utils.FrameStack(env, k=cfg.frame_stack)
 
         self.eval_env.seed(cfg.seed + 111)

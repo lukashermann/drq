@@ -179,14 +179,14 @@ class CurriculumWrapper(gym.Wrapper):
         return obs
 
     def write_log(self):
-        self.logger.log("train/curr_success_rate", np.mean(self.curr_success) if len(self.curr_success) else 0, self.step_counter)
-        self.logger.log("train/reg_success_rate", np.mean(self.reg_success) if len(self.reg_success) else 0, self.step_counter)
-        self.logger.log("train/difficulty_cur", self.difficulty_cur, self.step_counter)
-        self.logger.log("train/difficulty_reg", self.difficulty_reg, self.step_counter)
+        self.logger._try_sw_log("train/curr_success_rate", np.mean(self.curr_success) if len(self.curr_success) else 0, self.step_counter)
+        self.logger._try_sw_log("train/reg_success_rate", np.mean(self.reg_success) if len(self.reg_success) else 0, self.step_counter)
+        self.logger._try_sw_log("train/difficulty_cur", self.difficulty_cur, self.step_counter)
+        self.logger._try_sw_log("train/difficulty_reg", self.difficulty_reg, self.step_counter)
 
-        self.logger.log("train/curr_eprewmean_steps", np.mean(self.curr_episode_rewards) if len(self.curr_episode_rewards) else 0, self.step_counter)
-        self.logger.log("train/regular_resets_ratio", self.num_regular_resets / self.num_resets if self.num_resets > 0 else 0,self.step_counter)
-        self.logger.log("train/reg_eprewmean_steps", np.mean(self.reg_episode_rewards) if len(self.reg_episode_rewards) else 0, self.step_counter)
+        self.logger._try_sw_log("train/curr_eprewmean_steps", np.mean(self.curr_episode_rewards) if len(self.curr_episode_rewards) else 0, self.step_counter)
+        self.logger._try_sw_log("train/regular_resets_ratio", self.num_regular_resets / self.num_resets if self.num_resets > 0 else 0,self.step_counter)
+        self.logger._try_sw_log("train/reg_eprewmean_steps", np.mean(self.reg_episode_rewards) if len(self.reg_episode_rewards) else 0, self.step_counter)
 
 # if __name__ == "__main__":
 #     from gym_grasping.envs.grasping_env import GraspingEnv

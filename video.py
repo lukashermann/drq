@@ -5,10 +5,10 @@ import imageio
 import numpy as np
 
 import utils
-
+import cv2
 
 class VideoRecorder(object):
-    def __init__(self, root_dir, height=256, width=256, fps=10):
+    def __init__(self, root_dir, height=256, width=256, fps=25):
         self.save_dir = utils.make_dir(root_dir, 'video') if root_dir else None
         self.height = height
         self.width = width
@@ -21,7 +21,7 @@ class VideoRecorder(object):
 
     def record(self, env):
         if self.enabled:
-            frame = env.render(mode='human')
+            frame = env.render(mode='rgb_array')
                                # height=self.height,
                                # width=self.width)
             self.frames.append(frame)
