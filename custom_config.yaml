@@ -77,9 +77,32 @@ encoder_dict_obs:
       obs_shape: ${agent.params.obs_shape}
       feature_dim: 512
 
+critic:
+  class: drq.Critic
+  params:
+    encoder_cfg: ${agent.params.encoder_cfg}
+    action_shape: ${agent.params.action_shape}
+    hidden_dim: 1024
+    hidden_depth: 2
+    
+actor:
+  class: drq.Actor
+  params:
+    encoder_cfg: ${agent.params.encoder_cfg}
+    action_shape: ${agent.params.action_shape}
+    hidden_depth: 2
+    hidden_dim: 1024
+    log_std_bounds: [-10, 2]
+    
+encoder:
+  class: drq.Encoder
+  params:
+      obs_shape: ${agent.params.obs_shape}
+      feature_dim: 50
 
 # hydra configuration
 hydra:
   name: ${env}
   run:
-    dir: /tmp/drq_sac/runs/${now:%Y.%m.%d}/${now:%H%M%S}_${hydra.job.override_dirname}
+    dir: /tmp/drq_sac/runs/${now:%Y.%m.%d}/${now:%H%M%S}
+    #_${hydra.job.override_dirname}

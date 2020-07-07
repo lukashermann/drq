@@ -50,9 +50,12 @@ def make_env(cfg, logger):
     #                    camera_id=camera_id)
 
     env = gym.make(cfg.env)
-    env = DictToBoxWrapper(DictTransposeImage(CurriculumWrapper(env, cfg.num_train_steps, cfg.num_curriculum_epoch_steps, logger)))
+    env = CurriculumWrapper(env, cfg.num_train_steps, cfg.num_curriculum_epoch_steps, logger)
     # env = utils.FrameStack(env, k=cfg.frame_stack)
-
+    if "img_only" not in cfg.env:
+        env = DictToBoxWrapper(DictTransposeImage(env))
+    else:
+        env = TransposeImage(env)
     env.seed(cfg.seed)
     assert env.action_space.low.min() >= -1
     assert env.action_space.high.max() <= 1
@@ -77,8 +80,10 @@ class Workspace(object):
         self.device = torch.device(cfg.device)
         self.env = make_env(cfg, self.logger)
         self.eval_env = gym.make(cfg.env)
-        self.eval_env = DictToBoxWrapper(DictTransposeImage(self.eval_env))
-
+        if "img_only" not in cfg.env:
+            self.eval_env = DictTransposeImage(DictToBoxWrapper(self.eval_env))
+        else:
+            self.eval_env = TransposeImage(self.eval_env)
         # env = utils.FrameStack(env, k=cfg.frame_stack)
 
         self.eval_env.seed(cfg.seed + 111)
