@@ -81,7 +81,7 @@ class Workspace(object):
         self.env = make_env(cfg, self.logger)
         self.eval_env = gym.make(cfg.env)
         if "img_only" not in cfg.env:
-            self.eval_env = DictTransposeImage(DictToBoxWrapper(self.eval_env))
+            self.eval_env = DictToBoxWrapper(DictTransposeImage(self.eval_env))
         else:
             self.eval_env = TransposeImage(self.eval_env)
         # env = utils.FrameStack(env, k=cfg.frame_stack)
