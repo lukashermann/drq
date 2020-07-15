@@ -14,7 +14,7 @@ replay_buffer_capacity: 100000
 seed: 1
 num_curriculum_epoch_steps: 1000
 # eval
-eval_frequency: 5000
+eval_frequency: 10000
 num_eval_episodes: 10
 # misc
 log_frequency_step: 10000
@@ -29,6 +29,7 @@ frame_stack: 1
 lr: 1e-3
 # IMPORTANT: please use a batch size of 512 to reproduce the results in the paper. Hovewer, with a smaller batch size it still works well.
 batch_size: 512
+num_processes: 8
 
 # agent configuration
 agent:

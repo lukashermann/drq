@@ -219,12 +219,16 @@ class DRQAgent(object):
 
     def act(self, obs, sample=False):
         obs = torch.FloatTensor(obs).to(self.device)
-        obs = obs.unsqueeze(0)
+        if len(obs.shape) != 4:
+            obs = obs.unsqueeze(0)
         dist = self.actor(obs)
         action = dist.sample() if sample else dist.mean
         action = action.clamp(*self.action_range)
-        assert action.ndim == 2 and action.shape[0] == 1
-        return utils.to_np(action[0])
+        assert action.ndim == 2
+        if action.shape[0] == 1:
+            return utils.to_np(action[0])
+        else:
+            return utils.to_np(action)
 
     def update_critic(self, obs, obs_aug, action, reward, next_obs,
                       next_obs_aug, not_done, logger, step):

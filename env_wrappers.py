@@ -101,11 +101,13 @@ class DictToBoxWrapper(gym.ObservationWrapper):
 
 
 class CurriculumWrapper(gym.Wrapper):
-    def __init__(self, env, num_env_steps, num_curriculum_epoch_steps, logger=None, desired_rew_region=(0.4, 0.6), incr=0.002):
+    def __init__(self, env, num_env_steps, num_curriculum_epoch_steps, num_processes, logger=None, desired_rew_region=(0.4, 0.6), incr=0.002):
         self.env = env
         super(CurriculumWrapper, self).__init__(env)
+        assert num_curriculum_epoch_steps % num_processes == 0
         self.num_updates = num_env_steps // num_curriculum_epoch_steps
-        self.num_update_steps = num_curriculum_epoch_steps
+        self.num_update_steps = num_curriculum_epoch_steps // num_processes
+        self.num_processes = num_processes
         self.step_counter = 0
         self.update_counter = 0
         self.difficulty_cur = 0
@@ -119,7 +121,7 @@ class CurriculumWrapper(gym.Wrapper):
         self.logger = logger
         self.num_regular_resets = 0
         self.num_resets = 0
-        self.current_episode_return = 0
+        self.current_episode_return = np.zeros(self.num_processes)
 
     def update_difficulties(self):
         if len(self.curr_success) > 1:
@@ -158,24 +160,30 @@ class CurriculumWrapper(gym.Wrapper):
                 self.write_log()
             self.num_regular_resets = 0
             self.num_resets = 0
-        obs, rew, done, info = self.env.step(action)
+        data = self.create_data_dict()
+        self.env.step_async_with_curriculum_reset(action, data)
+        obs, rew, dones, infos = self.env.step_wait()
         self.current_episode_return += rew
-        if done:
-            if 'reset_info' in info.keys() and info['reset_info'] == 'curriculum':
-                self.curr_episode_rewards.append(self.current_episode_return)
-                self.curr_success.append(float(info['task_success']))
-                self.num_resets += 1
-            elif 'reset_info' in info.keys() and info['reset_info'] == 'regular':
-                self.reg_episode_rewards.append(self.current_episode_return)
-                self.reg_success.append(float(info['task_success']))
-                self.num_resets += 1
-                self.num_regular_resets += 1
-        return obs, rew, done, info
+        for i, done in enumerate(dones):
+            if done:
+                info = infos[i]
+                if 'reset_info' in info.keys() and info['reset_info'] == 'curriculum':
+                    self.curr_episode_rewards.append(self.current_episode_return[i])
+                    self.curr_success.append(float(info['task_success']))
+                    self.num_resets += 1
+                    self.current_episode_return[i] = 0
+                elif 'reset_info' in info.keys() and info['reset_info'] == 'regular':
+                    self.reg_episode_rewards.append(self.current_episode_return[i])
+                    self.reg_success.append(float(info['task_success']))
+                    self.num_resets += 1
+                    self.num_regular_resets += 1
+                    self.current_episode_return[i] = 0
+        return obs, rew, dones, infos
 
     def reset(self):
         data = self.create_data_dict()
-        obs = self.env.reset(data)
-        self.current_episode_return = 0
+        obs = self.env.reset_from_curriculum(data)
+        self.current_episode_return = np.zeros(self.num_processes)
         return obs
 
     def write_log(self):

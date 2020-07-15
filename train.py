@@ -18,6 +18,7 @@ from replay_buffer import ReplayBuffer
 from video import VideoRecorder
 import gym
 from env_wrappers import *
+from subproc_vec_env import SubprocVecEnv
 from gym_grasping.envs.grasping_env import GraspingEnv
 
 
@@ -62,6 +63,22 @@ def make_env(cfg, logger):
 
     return env
 
+def make_vec_envs(cfg, logger):
+    def make_env(env_id, seed, rank):
+        def _thunk():
+            env = gym.make(env_id)
+            env.seed(seed + rank)
+            if "img_only" not in env_id:
+                env = DictToBoxWrapper(DictTransposeImage(env))
+            else:
+                env = TransposeImage(env)
+            return env
+        return _thunk
+
+    envs = [make_env(cfg.env, cfg.seed, i) for i in range(cfg.num_processes)]
+    envs = SubprocVecEnv(envs)
+    envs = CurriculumWrapper(envs, cfg.num_train_steps, cfg.num_curriculum_epoch_steps, cfg.num_processes, logger)
+    return envs
 
 class Workspace(object):
     def __init__(self, cfg):
@@ -78,7 +95,8 @@ class Workspace(object):
 
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
-        self.env = make_env(cfg, self.logger)
+        # self.env = make_env(cfg, self.logger)
+        self.env = make_vec_envs(cfg, self.logger)
         self.eval_env = gym.make(cfg.env)
         if "img_only" not in cfg.env:
             self.eval_env = DictToBoxWrapper(DictTransposeImage(self.eval_env))
@@ -129,36 +147,33 @@ class Workspace(object):
         self.logger.dump(self.step)
 
     def run(self):
-        episode, episode_reward, episode_step, done = 0, 0, 1, True
+        episode, episode_rewards, episode_steps, dones = 0, np.zeros(self.cfg.num_processes), np.ones(self.cfg.num_processes), [True for _ in range(self.cfg.num_processes)]
         start_time = time.time()
+        obs = self.env.reset()
         while self.step < self.cfg.num_train_steps:
-            if done:
-                if self.step > 0:
-                    self.logger.log('train/duration',
-                                    time.time() - start_time, self.step)
-                    start_time = time.time()
-                    self.logger.dump(
-                        self.step, save=(self.step > self.cfg.num_seed_steps))
+            for i, done in enumerate(dones):
+                if done:
+                    if self.step > 0:
+                        self.logger.log('train/duration',
+                                        time.time() - start_time, self.step)
+                        start_time = time.time()
+                        self.logger.dump(
+                            self.step, save=(self.step > self.cfg.num_seed_steps))
 
-                # evaluate agent periodically
-                if self.step % self.cfg.eval_frequency == 0:
-                    self.logger.log('eval/episode', episode, self.step)
-                    self.evaluate()
+                    self.logger.log('train/episode_reward', episode_rewards[i],
+                                    self.step)
 
-                self.logger.log('train/episode_reward', episode_reward,
-                                self.step)
+                    # obs = self.env.reset()
+                    dones[i] = False
+                    episode_rewards[i] = 0
+                    episode_steps[i] = 0
+                    episode += 1
 
-                obs = self.env.reset()
-                done = False
-                episode_reward = 0
-                episode_step = 0
-                episode += 1
-
-                self.logger.log('train/episode', episode, self.step)
+                    self.logger.log('train/episode', episode, self.step)
 
             # sample action for data collection
             if self.step < self.cfg.num_seed_steps:
-                action = self.env.action_space.sample()
+                action = [self.env.action_space.sample() for _ in range(self.cfg.num_processes)]
             else:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=True)
@@ -169,19 +184,28 @@ class Workspace(object):
                     self.agent.update(self.replay_buffer, self.logger,
                                       self.step)
 
-            next_obs, reward, done, info = self.env.step(action)
+            next_obs, reward, dones, info = self.env.step(action)
 
             # allow infinite bootstrap
-            done = float(done)
-            done_no_max = 0 if episode_step + 1 == self.env.max_episode_steps else done
-            episode_reward += reward
+            dones = dones.astype('float')
+            # done_no_max = 0 if episode_step + 1 == self.env.max_episode_steps else done
+            # dones_no_max = (~(episode_steps + 1 == [self.env.max_episode_steps] * self.cfg.num_processes) & dones).astype('float')
+            episode_rewards += reward
 
-            self.replay_buffer.add(obs, action, reward, next_obs, done,
-                                   done_no_max)
+            dones_no_max = np.array([i['task_success'] for i in info]).astype('float')
+            # self.replay_buffer.add(obs, action, reward, next_obs, done,
+            #                        done_no_max)
+            self.replay_buffer.add_batch(obs, action, reward, next_obs, dones,
+                                         dones_no_max)
 
             obs = next_obs
-            episode_step += 1
-            self.step += 1
+            episode_steps += 1
+            self.step += self.cfg.num_processes
+
+            # evaluate agent periodically
+            if self.step % self.cfg.eval_frequency == 0:
+                self.logger.log('eval/episode', episode, self.step)
+                self.evaluate()
 
 
 @hydra.main(config_path='custom_config.yaml', strict=True)
